@@ -1,0 +1,16 @@
+import numpy as np
+# arr = np.array([[[1,2,3,4],[5,6,7,4],[8,9,10,4],[8,9,10,4]],[[1,2,3,4],[5,6,7,4],[8,9,10,4],[8,9,10,4]],[[1,2,3,4],[5,6,7,4],[8,9,10,4],[8,9,10,4]]])
+# print(arr)
+# print(arr.shape)
+# shape = 1,2
+# print(type(shape))
+# print(shape)
+# pool_type='max'
+# if pool_type=='max':
+#     flg=1
+# else:
+#     flg=0
+# print(flg)
+a=np.array([1,2,3])
+b=np.array([1,2,3])
+print(a*b)
