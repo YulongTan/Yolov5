@@ -2,12 +2,13 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-
+import onnx
+from onnx import numpy_helper
 
 class LONG(nn.Module):
     def __init__(self):
         super(LONG, self).__init__()
-        my_momentum = 0.01
+        # my_momentum = 0.01
         # CBS
         # (32x3x6x6)  0 32 3 622
         self.conv0 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=6, padding=2, stride=2, bias=True)
@@ -208,6 +209,24 @@ class LONG(nn.Module):
         # 236 255 512 101
         self.conv236 = nn.Conv2d(in_channels=512, out_channels=255, kernel_size=1, padding=0, stride=1, bias=True)
 
+        # 加载add and mul 的权重
+        mul_add_path = 'D:/LoongArch/LONG/Infrared-Object-Detection-main/my_weights_add_mul'
+        self.add206_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/add_206.npy')))
+        self.add225_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/add_225.npy')))
+        self.add244_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/add_244.npy')))
+        self.mul214_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/mul_214.npy')))
+        self.mul233_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/mul_233.npy')))
+        self.mul252_weight = nn.Parameter(torch.from_numpy(np.load(mul_add_path + '/mul_252.npy')))
+        # self.add206_weight = nn.Parameter(torch.randn(1, 3, 80, 80, 2))
+        # self.add225_weight = nn.Parameter(torch.randn(1, 3, 40, 40, 2))
+        # self.add244_weight = nn.Parameter(torch.randn(1, 3, 20, 20, 2))
+        # self.mul214_weight = nn.Parameter(torch.randn(1, 3, 80, 80, 2))
+        # self.mul233_weight = nn.Parameter(torch.randn(1, 3, 40, 40, 2))
+        # self.mul252_weight = nn.Parameter(torch.randn(1, 3, 20, 20, 2))
+
+
+
+
     def forward(self, im_data):
         # CBS 3x640x640
         sig1 = self.conv0(im_data)
@@ -216,19 +235,19 @@ class LONG(nn.Module):
         sig4 = self.conv3(mul2)
         mul5 = self.relu3(sig4)
         # CSP1-1
-        sig7 = self.con6(mul5)
+        sig7 = self.conv6(mul5)
         mul8 = self.relu6(sig7)
 
-        sig10 = self.con9(mul8)
+        sig10 = self.conv9(mul8)
         mul11 = self.relu9(sig10)
 
-        sig13 = self.con12(mul11)
+        sig13 = self.conv12(mul11)
         mul14 = self.relu12(sig13)
         add15 = mul14 + mul8
         # 旁路卷积
         sig17 = self.conv16(mul5)
         mul18 = self.relu16(sig17)
-        cat19 = torch.cat([add15, mul18],1)
+        cat19 = torch.cat((add15, mul18), 1)
         #
         sig21 = self.conv20(cat19)
         mul22 = self.relu20(sig21)
@@ -262,10 +281,10 @@ class LONG(nn.Module):
 
         cat46 = torch.cat([add42, mul45], 1)
         sig48 = self.conv47(cat46)
-        mul49 = self.relu47(sig48)   # ///.
+        mul49 = self.relu47(sig48)   # ///
 
         sig51 = self.conv50(mul49)
-        mul52 = self.relu50(sig51)  # //.
+        mul52 = self.relu50(sig51)  # //
 
         sig54 = self.conv53(mul52)
         mul55 = self.relu53(sig54)  # /
@@ -287,6 +306,524 @@ class LONG(nn.Module):
         mul75 = self.relu73(sig74)
 
         add76 = mul75 + add69  # /.
+
+        sig78 = self.conv77(mul52)
+        mul79 = self.relu77(sig78)
+
+        cat80 = torch.cat([add76, mul79], 1)
+        sig82 = self.conv81(cat80)
+        mul83 = self.relu81(sig82)  # //
+        sig85 = self.conv84(mul83)
+        mul86 = self.relu84(sig85)  # //
+        sig88 = self.conv87(mul86)
+        mul89 = self.relu87(sig88)  # //
+        sig91 = self.conv90(mul89)
+        mul92 = self.relu90(sig91)
+        sig94 = self.conv93(mul92)
+        mul95 = self.relu93(sig94)
+
+        add96 = mul89 + mul95
+
+        sig98 = self.conv97(mul86)
+        mul99 = self.relu97(sig98)
+        cat100 = torch.cat([add96, mul99], 1)
+
+        sig102 = self.conv101(cat100)
+        mul103 = self.relu101(sig102)
+        sig105 = self.conv104(mul103)
+        mul106 = self.relu104(sig105)  #
+        # max_pooling*3
+        pool107 = self.maxpooling107(mul106)
+        pool108 = self.maxpooling108(pool107)
+        pool109 = self.maxpooling108(pool108)
+        cat110 = torch.cat([mul106, pool107, pool108, pool109], 1)
+        sig112 = self.conv111(cat110)
+        mul113 = self.relu111(sig112)
+        sig115 = self.conv114(mul113)
+        mul116 = self.relu114(sig115)  # //
+
+        resize118 = F.interpolate(mul116, scale_factor=2, mode='nearest')
+        cat119 = torch.cat([mul83, resize118], 1)      # /
+        sig121 = self.conv120(cat119)
+        mul122 = self.relu120(sig121)
+        sig127 = self.conv126(mul122)
+        mul128 = self.relu126(sig127)
+
+        sig130 = self.conv129(cat119)
+        mul131 = self.relu129(sig130)
+        cat132 = torch.cat([mul128, mul131], 1)
+        sig134 = self.conv133(cat132)
+        mul135 = self.relu133(sig134)
+        sig137 = self.conv136(mul135)
+        mul138 = self.relu136(sig137)     # /
+
+        resize140 = F.interpolate(mul138, scale_factor=2, mode='nearest')
+
+        cat141 = torch.cat([mul49, resize140], 1)   # //
+        sig143 = self.conv142(cat141)
+        mul144 = self.relu142(sig143)
+        sig146 = self.conv145(mul144)
+        mul147 = self.relu145(sig146)
+        sig149 = self.conv148(mul147)
+        mul150 = self.relu148(sig149)
+
+        sig152 = self.conv151(cat141)
+        mul153 = self.relu151(sig152)
+        cat154 = torch.cat([mul150, mul153], 1)
+        sig156 = self.conv155(cat154)
+        mul157 = self.relu155(sig156)   # //
+        sig159 = self.conv158(mul157)
+        mul160 = self.relu158(sig159)
+
+        cat161 = torch.cat([mul138, mul160], 1)  # //
+        sig163 = self.conv162(cat161)
+        mul164 = self.relu162(sig163)
+        sig166 = self.conv165(mul164)
+        mul167 = self.relu165(sig166)
+        sig169 = self.conv168(mul167)
+        mul170 = self.relu168(sig169)
+
+        sig172 = self.conv171(cat161)
+        mul173 = self.relu171(sig172)
+        cat174 = torch.cat([mul170, mul173], 1)  # //
+        sig176 = self.conv175(cat174)
+        mul177 = self.relu175(sig176)  # /
+        sig179 = self.conv178(mul177)
+        mul180 = self.relu178(sig179)
+        cat181 = torch.cat([mul116, mul180], 1)  # //
+        sig183 = self.conv182(cat181)
+        mul184 = self.relu182(sig183)
+        sig186 = self.conv185(mul184)
+        mul187 = self.relu185(sig186)
+        sig189 = self.conv188(mul187)
+        mul190 = self.relu188(sig189)
+
+        sig192 = self.conv191(cat181)
+        mul193 = self.relu191(sig192)
+        cat194 = torch.cat([mul190, mul193], 1)
+
+        sig196 = self.conv195(cat194)
+        mul197 = self.relu195(sig196)
+
+        # 最后三个分支
+
+        cv198 = self.conv198(mul157)
+        cv217 = self.conv217(mul177)
+        cv236 = self.conv236(mul197)
+        # Reshape
+        reshape199 = cv198.reshape(1, 3, 85, 80, 80)
+        reshape218 = cv217.reshape(1, 3, 85, 40, 40)
+        reshape237 = cv236.reshape(1, 3, 85, 20, 20)
+        # Transpose
+        transpose200 = reshape199.permute(0, 1, 3, 4, 2)
+        transpose219 = reshape218.permute(0, 1, 3, 4, 2)
+        transpose238 = reshape237.permute(0, 1, 3, 4, 2)
+        # sigmoid
+        sig201 = torch.sigmoid(transpose200)
+        sig220 = torch.sigmoid(transpose219)
+        sig239 = torch.sigmoid(transpose238)
+        # Split
+        split202_2, split202_3, split202_1 = torch.split(sig201, [2, 2, 81], 4)
+        split221_2, split221_3, split221_1 = torch.split(sig220, [2, 2, 81], 4)
+        split240_2, split240_3, split240_1 = torch.split(sig239, [2, 2, 81], 4)
+
+        mul204 = torch.mul(split202_2, 2)
+        add206 = torch.add(mul204, self.add206_weight)
+        mul208 = torch.mul(add206, 8)
+        mul210 = torch.mul(split202_3, 2)
+        pow212 = torch.pow(mul210, 2)
+        mul214 = torch.mul(pow212, self.mul214_weight)
+        cat215 = torch.cat([split202_1, mul208, mul214], 4)
+
+        mul223 = torch.mul(split221_2, 2)
+        add225 = torch.add(mul223, self.add225_weight)
+        mul227 = torch.mul(add225, 16)
+        mul229 = torch.mul(split221_3, 2)
+        pow231 = torch.pow(mul229, 2)
+        mul233 = torch.mul(pow231, self.mul233_weight)
+        cat234 = torch.cat([split221_1, mul227, mul233], 4)
+
+        mul242 = torch.mul(split240_2, 2)
+        add244 = torch.add(mul242, self.add244_weight)
+        mul246 = torch.mul(add244, 32)
+        mul248 = torch.mul(split240_3, 2)
+        pow250 = torch.pow(mul248, 2)
+        mul252 = torch.mul(pow250, self.mul252_weight)
+        cat253 = torch.cat([split240_1, mul246, mul252], 4)
+
+        reshape216 = cat215.reshape(1, -1, 85)
+        reshape235 = cat234.reshape(1, -1, 85)
+        reshape253 = cat253.reshape(1, -1, 85)
+        output = torch.cat([reshape216, reshape235, reshape253], 1)
+        return output
+
+
+if __name__ == "__main__":
+    model = LONG()
+
+
+
+    # print(model.add206_weight)
+    # ----------------------------加载.onnx文件------------------------------------
+    #
+    # 加载 YOLOv5 的 ONNX 模型
+    yolov5_model_path = 'D:/LoongArch/LONG/yolov5s.onnx'
+    yolov5_model = onnx.load(yolov5_model_path)
+
+    # 获取 YOLOv5 的初始化器（即权重参数）
+    yolov5_initializers = yolov5_model.graph.initializer
+
+    # 遍历初始化器并将每个权重赋值给自己的模型
+    for initializer in yolov5_initializers:
+        # 获取权重名称和权重值
+        weight_name = initializer.name
+        weight_array = numpy_helper.to_array(initializer)
+        # print(weight_name)
+        if weight_name == 'model.0.conv.weight':
+            model.conv0.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.0.conv.bias':
+            model.conv0.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.1.conv.weight':
+            model.conv3.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.1.conv.bias':
+            model.conv3.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.2.cv1.conv.weight':
+            model.conv6.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.2.cv1.conv.bias':
+            model.conv6.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.2.m.0.cv1.conv.weight':
+            model.conv9.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.2.m.0.cv1.conv.bias':
+            model.conv9.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.2.m.0.cv2.conv.weight':
+            model.conv12.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.2.m.0.cv2.conv.bias':
+            model.conv12.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.2.cv2.conv.weight':
+            model.conv16.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.2.cv2.conv.bias':
+            model.conv16.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.2.cv3.conv.weight':
+            model.conv20.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.2.cv3.conv.bias':
+            model.conv20.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.3.conv.weight':
+            model.conv23.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.3.conv.bias':
+            model.conv23.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.cv1.conv.weight':
+            model.conv26.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.cv1.conv.bias':
+            model.conv26.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.m.0.cv1.conv.weight':
+            model.conv29.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.m.0.cv1.conv.bias':
+            model.conv29.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.m.0.cv2.conv.weight':
+            model.conv32.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.m.0.cv2.conv.bias':
+            model.conv32.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.m.1.cv1.conv.weight':
+            model.conv36.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.m.1.cv1.conv.bias':
+            model.conv36.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.m.1.cv2.conv.weight':
+            model.conv39.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.m.1.cv2.conv.bias':
+            model.conv39.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.cv2.conv.weight':
+            model.conv43.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.cv2.conv.bias':
+            model.conv43.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.4.cv3.conv.weight':
+            model.conv47.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.4.cv3.conv.bias':
+            model.conv47.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.5.conv.weight':
+            model.conv50.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.5.conv.bias':
+            model.conv50.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.cv1.conv.weight':
+            model.conv53.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.cv1.conv.bias':
+            model.conv53.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.0.cv1.conv.weight':
+            model.conv56.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.0.cv1.conv.bias':
+            model.conv56.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.0.cv2.conv.weight':
+            model.conv59.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.0.cv2.conv.bias':
+            model.conv59.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.1.cv1.conv.weight':
+            model.conv63.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.1.cv1.conv.bias':
+            model.conv63.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.1.cv2.conv.weight':
+            model.conv66.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.1.cv2.conv.bias':
+            model.conv66.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.2.cv1.conv.weight':
+            model.conv70.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.2.cv1.conv.bias':
+            model.conv70.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.m.2.cv2.conv.weight':
+            model.conv73.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.m.2.cv2.conv.bias':
+            model.conv73.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.cv2.conv.weight':
+            model.conv77.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.cv2.conv.bias':
+            model.conv77.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.6.cv3.conv.weight':
+            model.conv81.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.6.cv3.conv.bias':
+            model.conv81.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.7.conv.weight':
+            model.conv84.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.7.conv.bias':
+            model.conv84.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.8.cv1.conv.weight':
+            model.conv87.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.8.cv1.conv.bias':
+            model.conv87.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.8.m.0.cv1.conv.weight':
+            model.conv90.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.8.m.0.cv1.conv.bias':
+            model.conv90.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.8.m.0.cv2.conv.weight':
+            model.conv93.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.8.m.0.cv2.conv.bias':
+            model.conv93.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.8.cv2.conv.weight':
+            model.conv97.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.8.cv2.conv.bias':
+            model.conv97.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.8.cv3.conv.weight':
+            model.conv101.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.8.cv3.conv.bias':
+            model.conv101.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.9.cv1.conv.weight':
+            model.conv104.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.9.cv1.conv.bias':
+            model.conv104.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.9.cv2.conv.weight':
+            model.conv111.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.9.cv2.conv.bias':
+            model.conv111.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.10.conv.weight':
+            model.conv114.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.10.conv.bias':
+            model.conv114.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.13.cv1.conv.weight':
+            model.conv120.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.13.cv1.conv.bias':
+            model.conv120.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.13.m.0.cv1.conv.weight':
+            model.conv123.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.13.m.0.cv1.conv.bias':
+            model.conv123.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.13.m.0.cv2.conv.weight':
+            model.conv126.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.13.m.0.cv2.conv.bias':
+            model.conv126.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.13.cv2.conv.weight':
+            model.conv129.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.13.cv2.conv.bias':
+            model.conv129.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.13.cv3.conv.weight':
+            model.conv133.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.13.cv3.conv.bias':
+            model.conv133.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.14.conv.weight':
+            model.conv136.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.14.conv.bias':
+            model.conv136.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.17.cv1.conv.weight':
+            model.conv142.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.17.cv1.conv.bias':
+            model.conv142.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.17.m.0.cv1.conv.weight':
+            model.conv145.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.17.m.0.cv1.conv.bias':
+            model.conv145.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.17.m.0.cv2.conv.weight':
+            model.conv148.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.17.m.0.cv2.conv.bias':
+            model.conv148.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.17.cv2.conv.weight':
+            model.conv151.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.17.cv2.conv.bias':
+            model.conv151.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.17.cv3.conv.weight':
+            model.conv155.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.17.cv3.conv.bias':
+            model.conv155.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.18.conv.weight':
+            model.conv158.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.18.conv.bias':
+            model.conv158.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.20.cv1.conv.weight':
+            model.conv162.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.20.cv1.conv.bias':
+            model.conv162.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.20.m.0.cv1.conv.weight':
+            model.conv165.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.20.m.0.cv1.conv.bias':
+            model.conv165.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.20.m.0.cv2.conv.weight':
+            model.conv168.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.20.m.0.cv2.conv.bias':
+            model.conv168.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.20.cv2.conv.weight':
+            model.conv171.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.20.cv2.conv.bias':
+            model.conv171.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.20.cv3.conv.weight':
+            model.conv175.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.20.cv3.conv.bias':
+            model.conv175.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.21.conv.weight':
+            model.conv178.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.21.conv.bias':
+            model.conv178.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.23.cv1.conv.weight':
+            model.conv182.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.23.cv1.conv.bias':
+            model.conv182.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.23.m.0.cv1.conv.weight':
+            model.conv185.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.23.m.0.cv1.conv.bias':
+            model.conv185.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.23.m.0.cv2.conv.weight':
+            model.conv188.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.23.m.0.cv2.conv.bias':
+            model.conv188.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.23.cv2.conv.weight':
+            model.conv191.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.23.cv2.conv.bias':
+            model.conv191.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.23.cv3.conv.weight':
+            model.conv195.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.23.cv3.conv.bias':
+            model.conv195.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.24.m.0.weight':
+            model.conv198.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.24.m.0.bias':
+            model.conv198.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.24.m.1.weight':
+            model.conv217.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.24.m.1.bias':
+            model.conv217.bias = nn.Parameter(torch.tensor(weight_array))
+
+        elif weight_name == 'model.24.m.2.weight':
+            model.conv236.weight = nn.Parameter(torch.tensor(weight_array))
+        elif weight_name == 'model.24.m.2.bias':
+            model.conv236.bias = nn.Parameter(torch.tensor(weight_array))
+            # print(model.conv236.bias)
+    # --------------------------------------------------------------------------------
+
+    # --------------------将自己的模型导出为.onnx--------------------------------------------
+    # model.eval()
+    # # torch.save(model.state_dict(), "D:/LoongArch/LONG/my_model_test.pt")
+    # torch.onnx.export(model,
+    #                   torch.randn(1, 3, 640, 640),
+    #                   "D:/LoongArch/LONG/my_model_test.onnx",
+    #                   export_params=True,
+    #                   opset_version=11,
+    #                   do_constant_folding=True,
+    #                   input_names=['input'],
+    #                   output_names=['output'],
+    #                   )
+    # -----------------------------------------------------------------------------------
+    # 发现.onnx和.pt文件中各个卷积层的命名一致
+    # -------------------------------------加载.pt文件------------------------------------------------
+    # # 加载 YOLOv5 的 PyTorch 模型文件
+    # yolov5_model_path = 'D:/LoongArch/LONG/Infrared-Object-Detection-main/yolov5s.pt'
+    # yolov5_model = torch.load(yolov5_model_path)['model'].float().fuse().eval()
+    #
+    # # 实例化自己的模型
+    # # my_model = LONG()
+    #
+    # # 遍历 YOLOv5 模型的状态字典，并将每个权重赋值给自己的模型
+    # for name, param in yolov5_model.named_parameters():
+    #     print(name)
+    #     # 根据自己的模型结构和 YOLOv5 模型的结构，将参数赋值给对应的层和参数
+    #     # 示例：if name == 'layer1.weight': my_model.layer1.weight = param
+    #     # 继续为其他层赋值...
+    # -------------------------------------------------------------------------------------
+
+    # ----------------------打印某卷积层的卷积核和bias--------------------------------------
+    # conv_layyer = getattr(model, 'conv0')
+    # weights = conv_layyer.weight.data
+    # bias = conv_layyer.bias.data
+    # print("Convolution Layer Weight:")
+    # print(weights)
+    # print("Convolution Layer Bias:")
+    # print(bias)
+    # -----------------------------------------------------------------------------------
+
+
+
+
 
 
 
